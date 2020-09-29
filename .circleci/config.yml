@@ -3,19 +3,33 @@ version: 2.1
 workflows:
   test:
     jobs:
-      - build_test_kafka_1-0:
+      - build_test_kafka:
+          kafka_version: 1.0.0
+          kafka_package: kafka_2.12-1.0.0.tgz
           filters:
             branches:
               ignore:
                 - /^release\/.*/
                 - master
-      - build_test_kafka_2-0:
+      - build_test_kafka:
+          kafka_version: 2.1.0
+          kafka_package: kafka_2.12-2.1.0.tgz
           filters:
             branches:
               ignore:
                 - /^release\/.*/
                 - master
-      - build_test_kafka_2-6:
+      - build_test_kafka:
+          kafka_version: 2.4.0
+          kafka_package: kafka_2.12-2.4.0.tgz
+          filters:
+            branches:
+              ignore:
+                - /^release\/.*/
+                - master
+      - build_test_kafka:
+          kafka_version: 2.6.0
+          kafka_package: kafka_2.13-2.6.0.tgz
           filters:
             branches:
               ignore:
@@ -23,30 +37,22 @@ workflows:
                 - master
 
 jobs:
-  build_test_kafka_1-0:
+  build_test_kafka:
     working_directory: ~/repo
     executor:
       name: kafka_connect_linux
+    parameters:
+      kafka_version:
+        description: "Kafka version"
+        type: string
+      kafka_package:
+        description: "Kafka package name"
+        type: string
     steps:
       - build_test:
-          kafka_version: 1.0.0
-          kafka_package: kafka_2.12-1.0.0.tgz
-  build_test_kafka_2-0:
-    working_directory: ~/repo
-    executor:
-      name: kafka_connect_linux
-    steps:
-      - build_test:
-          kafka_version: 2.0.0
-          kafka_package: kafka_2.12-2.0.0.tgz
-  build_test_kafka_2-6:
-    working_directory: ~/repo
-    executor:
-      name: kafka_connect_linux
-    steps:
-      - build_test:
-          kafka_version: 2.6.0
-          kafka_package: kafka_2.13-2.6.0.tgz
+          kafka_version: << parameters.kafka_version >>
+          kafka_package: << parameters.kafka_package >>
+
 
 commands:
   build_test:
