@@ -3,17 +3,19 @@ version: 2.1
 workflows:
   test:
     jobs:
-      - build_test:
-          kafka_version: 2.6.0
-          kafka_package: kafka_2.13-2.6.0.tgz
+      - build_test_kafka_1-0:
           filters:
             branches:
               ignore:
                 - /^release\/.*/
                 - master
-      - build_test:
-          kafka_version: 1.0.0
-          kafka_package: kafka_2.12-1.0.0.tgz
+      - build_test_kafka_2-0:
+          filters:
+            branches:
+              ignore:
+                - /^release\/.*/
+                - master
+      - build_test_kafka_2-6:
           filters:
             branches:
               ignore:
@@ -21,10 +23,33 @@ workflows:
                 - master
 
 jobs:
-  build_test:
+  build_test_kafka_1-0:
     working_directory: ~/repo
     executor:
       name: kafka_connect_linux
+    steps:
+      - build_test:
+          kafka_version: 1.0.0
+          kafka_package: kafka_2.12-1.0.0.tgz
+  build_test_kafka_2-0:
+    working_directory: ~/repo
+    executor:
+      name: kafka_connect_linux
+    steps:
+      - build_test:
+          kafka_version: 2.0.0
+          kafka_package: kafka_2.12-2.0.0.tgz
+  build_test_kafka_2-6:
+    working_directory: ~/repo
+    executor:
+      name: kafka_connect_linux
+    steps:
+      - build_test:
+          kafka_version: 2.6.0
+          kafka_package: kafka_2.13-2.6.0.tgz
+
+commands:
+  build_test:
     parameters:
       kafka_version:
         description: "Kafka version"
@@ -58,17 +83,6 @@ jobs:
       - run:
           name: Create file for checksum
           command: echo $CI_SPLUNK_VERSION > /tmp/splunk_version.txt
-      - install_splunk
-      - install_kafka:
-          kafka_version: << parameters.kafka_version >>
-          kafka_package: << parameters.kafka_package >>
-      - test_kafka_connect_upgrade
-      - run_functional_tests
-
-commands:
-  install_splunk:
-    description: "Install Splunk"
-    steps:
       - run:
           name: Install Splunk
           command: |
@@ -110,17 +124,6 @@ commands:
             curl -X POST -u $CI_SPLUNK_USERNAME:$CI_SPLUNK_PASSWORD -k -d "name=$CI_INDEX_EVENTS&datatype=event" https://$CI_SPLUNK_HOST:$CI_SPLUNK_PORT/servicesNS/-/search/data/indexes
             curl -X POST -u $CI_SPLUNK_USERNAME:$CI_SPLUNK_PASSWORD -k -d "name=$CI_KAFKA_HEADER_INDEX&datatype=event" https://$CI_SPLUNK_HOST:$CI_SPLUNK_PORT/servicesNS/-/search/data/indexes
             sudo /opt/splunk/bin/splunk restart --accept-license --answer-yes --no-prompt
-
-  install_kafka:
-    description: "Install Kafka"
-    parameters:
-      kafka_version:
-        description: "Kafka version"
-        type: string
-      kafka_package:
-        description: "Kafka package name"
-        type: string
-    steps:
       - run:
           name: Install Kafka << parameters.kafka_version >>
           command: |
@@ -162,9 +165,6 @@ commands:
             sudo systemctl daemon-reload
             sudo systemctl start zookeeper
             sudo systemctl start kafka
-  test_kafka_connect_upgrade:
-    description: "Test kafka connect upgrade"
-    steps:
       - run:
           name: Test kafka connect upgrade
           command: |
@@ -181,10 +181,6 @@ commands:
             export PYTHONWARNINGS="ignore:Unverified HTTPS request"
             echo "Test kafka connect upgrade ..."
             python test/lib/connector_upgrade.py
-
-  run_functional_tests:
-    description: "Run functional tests on current kafka connect version"
-    steps:
       - run:
           name: Install kafka connect
           command: |
