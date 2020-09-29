@@ -1,10 +1,19 @@
 version: 2.1
 
 workflows:
-  version: 2.1
   test:
     jobs:
       - build_test:
+          kafka_version: 2.6.0
+          kafka_package: kafka_2.13-2.6.0.tgz
+          filters:
+            branches:
+              ignore:
+                - /^release\/.*/
+                - master
+      - build_test:
+          kafka_version: 1.0.0
+          kafka_package: kafka_2.12-1.0.0.tgz
           filters:
             branches:
               ignore:
@@ -13,26 +22,16 @@ workflows:
 
 jobs:
   build_test:
-    resource_class: large
-    machine:
-      image: ubuntu-1604:201903-01
-    environment:
-      MINIKUBE_HOME: /home/circleci
-      CI_SPLUNK_VERSION: "8.0.2.1"
-      CI_SPLUNK_FILENAME: splunk-8.0.2.1-f002026bad55-linux-2.6-amd64.deb
-      CI_SPLUNK_HOST: 127.0.0.1
-      CI_SPLUNK_PORT: 8089
-      CI_SPLUNK_USERNAME: admin
-      CI_SPLUNK_HEC_TOKEN: a6b5e77f-d5f6-415a-bd43-930cecb12959
-      CI_SPLUNK_HEC_TOKEN_ACK: a6b5e77f-d5f6-415a-bd43-930cecb12950
-      CI_SPLUNK_PASSWORD: helloworld
-      CI_INDEX_EVENTS: main
-      CI_KAFKA_HEADER_INDEX: kafka
-      CI_DATAGEN_IMAGE: rock1017/log-generator:latest
-      CI_KAFKA_VERSION: 2.4.0
-      CI_KAFKA_FILENAME: kafka_2.13-2.4.0.tgz
-      CI_OLD_CONNECTOR_VERSION: v1.2.0
     working_directory: ~/repo
+    executor:
+      name: kafka_connect_linux
+    parameters:
+      kafka_version:
+        description: "Kafka version"
+        type: string
+      kafka_package:
+        description: "Kafka package name"
+        type: string
     steps:
       - attach_workspace:
           at: /tmp
@@ -60,7 +59,9 @@ jobs:
           name: Create file for checksum
           command: echo $CI_SPLUNK_VERSION > /tmp/splunk_version.txt
       - install_splunk
-      - install_kafka
+      - install_kafka:
+          kafka_version: << parameters.kafka_version >>
+          kafka_package: << parameters.kafka_package >>
       - test_kafka_connect_upgrade
       - run_functional_tests
 
@@ -112,13 +113,20 @@ commands:
 
   install_kafka:
     description: "Install Kafka"
+    parameters:
+      kafka_version:
+        description: "Kafka version"
+        type: string
+      kafka_package:
+        description: "Kafka package name"
+        type: string
     steps:
       - run:
-          name: Install Kafka
+          name: Install Kafka << parameters.kafka_version >>
           command: |
-            cd /tmp && wget http://www-us.apache.org/dist/kafka/$CI_KAFKA_VERSION/$CI_KAFKA_FILENAME
-            sudo tar xzf $CI_KAFKA_FILENAME
-            rm $CI_KAFKA_FILENAME
+            cd /tmp && wget https://archive.apache.org/dist/kafka/<< parameters.kafka_version >>/<< parameters.kafka_package >>
+            sudo tar xzf << parameters.kafka_package >>
+            rm << parameters.kafka_package >>
             sudo mv kafka_* /usr/local/kafka
             sudo tee /etc/systemd/system/zookeeper.service > /dev/null \<< EOF
             [Unit]
@@ -191,3 +199,23 @@ commands:
             sleep 5
             echo "Running functional tests....."
             python -m pytest -p no:warnings -s
+
+executors:
+  kafka_connect_linux:
+    resource_class: large
+    machine:
+      image: ubuntu-1604:201903-01
+    environment:
+      MINIKUBE_HOME: /home/circleci
+      CI_SPLUNK_VERSION: "8.0.2.1"
+      CI_SPLUNK_FILENAME: splunk-8.0.2.1-f002026bad55-linux-2.6-amd64.deb
+      CI_SPLUNK_HOST: 127.0.0.1
+      CI_SPLUNK_PORT: 8089
+      CI_SPLUNK_USERNAME: admin
+      CI_SPLUNK_HEC_TOKEN: a6b5e77f-d5f6-415a-bd43-930cecb12959
+      CI_SPLUNK_HEC_TOKEN_ACK: a6b5e77f-d5f6-415a-bd43-930cecb12950
+      CI_SPLUNK_PASSWORD: helloworld
+      CI_INDEX_EVENTS: main
+      CI_KAFKA_HEADER_INDEX: kafka
+      CI_DATAGEN_IMAGE: rock1017/log-generator:latest
+      CI_OLD_CONNECTOR_VERSION: v1.2.0
